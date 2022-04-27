@@ -195,19 +195,6 @@ t_token *push_list(t_db_list *info, t_token *token, char *str, int type)
         return (push_full_list(info, token, str, type));
     return (0);
 }
-/*
-t_db_list *init_list(t_db_list *info)
-{
-    info = malloc(sizeof(t_db_list));
-    if (!info)
-        perror ("MALLOC CREATE LIST");
-    info->first = NULL;
-    info->last = NULL;
-    info->lenght = 0;
-
-    return (info);
-}
-*/
 
 t_db_list *init_list(t_db_list *info)
 {
@@ -221,14 +208,7 @@ t_db_list *init_list(t_db_list *info)
     return (info);
 }
 
-/*
-int    execute_cmds(t_token *token)
-{
-    
-}
-*/
-
-void determine_cmds_num(t_token *token, t_pipe_exec *pipe_exec)
+void determine_pipe_num(t_token *token, t_pipe_exec *pipe_exec)
 {
     t_token *tmp;
 
@@ -259,23 +239,21 @@ void    determine_in_out(t_token *token, t_pipe_exec *pipe_exec)
     }
 }
 
-void    handle_path(t_token **token, t_pipe_exec *pipe_exec)
+void    handle_cmd(t_token **token, t_pipe_exec *pipe_exec)
 {
-    pipe_exec->path = NULL;
+    pipe_exec->cmd = NULL;
     while (*token && !((*token)->type == 9 || (*token)->type == 10))
     {
-        //printf("token->str1: %s et token->type1: %d\n", (*token)->str, (*token)->type);
         if ((*token)->type == 1)
         {
-            pipe_exec->path = (*token)->str;
+            pipe_exec->cmd = (*token)->str;
             if ((*token)->next)
                 *token = (*token)->next;
         }
-        if (!(*token)->next || pipe_exec->path)
+        if (!(*token)->next || pipe_exec->cmd)
             break;
         *token = (*token)->next;
     }
-    //printf("token->str: %s\n", (*token)->str);
 }
 
 
@@ -293,15 +271,11 @@ void    handle_args(t_token **token, t_pipe_exec *pipe_exec)
             pipe_exec->args_nbr++;
         tmp = tmp->next;
     }
-    //printf("pipe_exec->args_nbr: %d\n", pipe_exec->args_nbr);
     pipe_exec->newargs = malloc((pipe_exec->args_nbr + 2) * sizeof(char *));
-    pipe_exec->newargs[++i] = pipe_exec->path;
+    pipe_exec->newargs[++i] = pipe_exec->cmd;
     while (*token && (*token)->type == 2)
     {
-        //printf("token->str2: %s et token->type2: %d\n", (*token)->str, (*token)->type);
         pipe_exec->newargs[++i] = (*token)->str;
-        //printf("i: %d\n", i);
-        //printf("pipe_exec->newargs[++i]: %s\n", pipe_exec->newargs[i]);
         if (!(*token)->next)
             break;
         *token = (*token)->next;
@@ -309,88 +283,364 @@ void    handle_args(t_token **token, t_pipe_exec *pipe_exec)
     pipe_exec->newargs[i + 1] = NULL;
 }
 
-int handle_path_args(t_token **token, t_pipe_exec *pipe_exec)
+size_t	ft_strlen(const char *s)
 {
-    handle_path(token, pipe_exec);
-    //printf("(*token)->str: %s\n", (*token)->str);
-    handle_args(token, pipe_exec);
-    //printf("ICI pipe_exec->newargs[0]: %s\n", pipe_exec->newargs[0]);
-    //printf("ICI pipe_exec->newargs[1]: %s\n", pipe_exec->newargs[1]);
+	size_t	len;
+
+	len = 0;
+	while (s[len])
+		len++;
+	return (len);
+}
+
+char	*ft_strjoin(char const *s1, char const *s2)
+{
+	char	*str;
+	int		i;
+	int		j;
+
+	i = 0;
+	j = 0;
+	if (!s1 || !s2)
+		return (NULL);
+	str = malloc((ft_strlen(s1) + ft_strlen(s2)) * sizeof(char) + 1);
+	if (!str)
+		return (NULL);
+	while (s1[i])
+	{
+		str[i] = s1[i];
+		i++;
+	}
+	while (s2[j])
+	{
+		str[i + j] = s2[j];
+		j++;
+	}
+	str[i + j] = '\0';
+	return (str);
+}
+
+char	*ft_strdup(const char *s)
+{
+	char	*new_s;
+	int		i;
+
+	new_s = malloc(ft_strlen(s) * sizeof(char) + 1);
+	if (!new_s)
+		return (NULL);
+	i = 0;
+	while (s[i])
+	{
+		new_s[i] = s[i];
+		i++;
+	}
+	new_s[i] = '\0';
+	return (new_s);
+}
+
+void    determine_path(char *cmd, char **path, char **env)
+{
+    int i;
+
+    if (cmd[0] == '/')
+    {
+        *path = NULL;
+        return ;
+    }
+    i = -1;
+    while (env[++i])
+    {
+        if (!strncmp(env[i], "PATH=", 5))
+            break;
+    }
+    *path = env[i];
+}
+
+int determine_cmd_no_path(char **bin, char *cmd, char *path)
+{
+    int fd;
+
+    *bin = ft_strdup(cmd);
+    if (!(*bin))
+        return (1);
+    fd = access(*bin, F_OK & W_OK);
+    if (fd == -1)
+        return (1);
     return (0);
 }
-// IMPLEMENTER RECHERCHE DANS $PATH
+
+
+int determine_cmd_path(char **bin, char *cmd, char *path)
+{
+    int fd;
+    int i;
+    char    *tmp;
+
+    fd = -1;
+    path += 5;
+    while (fd == -1 && path[i])
+    {
+        i = 0;
+        while (path[i] && path[i] != ':')
+            i++;
+        path[i] = 0;
+        tmp = ft_strjoin(path, "/");
+        *bin = ft_strjoin(tmp, cmd);
+        if (!tmp || !(*bin))
+            return (1);
+        free(tmp);
+        fd = access(*bin, F_OK & W_OK);
+        i++;
+        path = path + i;
+    }
+    if (fd == -1)
+        return (1);
+    else
+        return (0);
+}
+
+int handle_cmd_args(t_token **token, t_pipe_exec *pipe_exec)
+{
+    int found;
+    
+    handle_cmd(token, pipe_exec);
+    handle_args(token, pipe_exec);
+    determine_path(pipe_exec->cmd, &pipe_exec->path, pipe_exec->env);
+    if (!pipe_exec->path)
+        found = determine_cmd_no_path(&pipe_exec->bin, pipe_exec->cmd, pipe_exec->path);
+    else
+        found = determine_cmd_path(&pipe_exec->bin, pipe_exec->cmd, pipe_exec->path);
+    if (found)
+        return (1);
+    return (0);
+}
 // SEGFAULT SI AUCUNE ENTREE
-int    execute_commands(t_token *token, t_pipe_exec pipe_exec)
+// GERER les >> correctement (e.g creer fichier si existe pas)
+// CHECKER les leaks de la partie exec des que ce sera possible
+// GERER les wildcards
+// GERER les parentheses
+// GERER ./a.out
+
+/*
+int    execute_commands(t_token *token, t_pipe_exec *pipe_exec)
 {
     int id;
-    int status;
 
-    pipe_exec.save_input = dup(STDIN_FILENO);
-    pipe_exec.save_output = dup(STDOUT_FILENO);
-    if (pipe_exec.infile)
+    pipe_exec->save_input = dup(STDIN_FILENO);
+    pipe_exec->save_output = dup(STDOUT_FILENO);
+    if (pipe_exec->infile)
     {
-        pipe_exec.input = open(pipe_exec.infile, O_RDONLY);
-        if (pipe_exec.input == -1)
+        pipe_exec->input = open(pipe_exec->infile, O_RDONLY);
+        if (pipe_exec->input == -1)
             return (1);
     }
     else
-        pipe_exec.input = dup(pipe_exec.save_input);
-    
-    while (pipe_exec.cmds_nbr > 0)
+        pipe_exec->input = dup(pipe_exec->save_input);
+    while (pipe_exec->cmds_nbr > 0)
     {
-        handle_path_args(&token, &pipe_exec);
-        dup2(pipe_exec.input, STDIN_FILENO);
-        close(pipe_exec.input);
-        if (pipe_exec.cmds_nbr == 1)
+        if (handle_cmd_args(&token, pipe_exec))
+            return (1);
+        dup2(pipe_exec->input, STDIN_FILENO);
+        close(pipe_exec->input);
+        if (pipe_exec->cmds_nbr == 1)
         {
-            if (pipe_exec.outfile)
+            if (pipe_exec->outfile)
             {
-                pipe_exec.output = open(pipe_exec.outfile, O_RDONLY);
-                if (pipe_exec.output == -1)
+                pipe_exec->output = open(pipe_exec->outfile, O_RDONLY);
+                if (pipe_exec->output == -1)
                     return (1);
             }
             else
-                pipe_exec.output = dup(pipe_exec.save_output);
+                pipe_exec->output = dup(pipe_exec->save_output);
         
         }
         else
         {
-            pipe(pipe_exec.pipe_fd);
-            pipe_exec.input = pipe_exec.pipe_fd[0];
-            pipe_exec.output = pipe_exec.pipe_fd[1];    
+            pipe(pipe_exec->pipe_fd);
+            pipe_exec->input = pipe_exec->pipe_fd[0];
+            pipe_exec->output = pipe_exec->pipe_fd[1];    
         }
-        dup2(pipe_exec.output, STDOUT_FILENO);
-        close(pipe_exec.output);
-        //if (pipe_exec.cmds_nbr == 1)
+        dup2(pipe_exec->output, STDOUT_FILENO);
+        close(pipe_exec->output);
         id = fork();
         if (!id)
         {
-            execve(pipe_exec.path, pipe_exec.newargs, pipe_exec.env);
-            exit(0);
+            execve(pipe_exec->bin, pipe_exec->newargs, pipe_exec->env);
+            exit(1);
         } 
-        pipe_exec.cmds_nbr--;            
+        pipe_exec->cmds_nbr--;            
 
     }
-    dup2(pipe_exec.save_input, STDIN_FILENO);
-    dup2(pipe_exec.save_output, STDOUT_FILENO);
-    close(pipe_exec.save_input);
-    close(pipe_exec.save_output);
-    waitpid(id, &status, 0);
-    free(pipe_exec.newargs);
+    dup2(pipe_exec->save_input, STDIN_FILENO);
+    dup2(pipe_exec->save_output, STDOUT_FILENO);
+    close(pipe_exec->save_input);
+    close(pipe_exec->save_output);
+    waitpid(id, &pipe_exec->status, 0);
+    free(pipe_exec->newargs);
     return (0);
 }
+*/
+
+int    input_redirection(char  *infile, int   *input, int save_input)
+{
+    if (infile)
+    {
+        *input = open(infile, O_RDONLY);
+        if (*input == -1)
+            return (1);
+    }
+    else
+        *input = dup(save_input);
+    return (0);
+}
+
+int    output_redirection(char  *outfile, int   *output, int save_output)
+{
+    if (outfile)
+    {
+        *output = open(outfile, O_CREAT | O_WRONLY, 0664);
+        if (*output == -1)
+            return (1);
+    }
+    else
+        *output = dup(save_output);
+    return (0);
+}
+
+int pipe_redirections(int   pipe_fd[2], int *input, int *output)
+{
+    if (pipe(pipe_fd) == -1)
+        return (1);
+    *input = pipe_fd[0];
+    *output = pipe_fd[1];
+    return (0);
+}
+
+void    restore_fd(int save_input, int save_output)
+{
+    dup2(save_input, STDIN_FILENO);
+    dup2(save_output, STDOUT_FILENO);
+    close(save_input);
+    close(save_output);
+}
+
+int handle_execution(t_token **token, t_pipe_exec **pipe_exec, int *id)
+{
+    if (handle_cmd_args(token, *pipe_exec))
+        return (1);
+    dup2((*pipe_exec)->input, STDIN_FILENO);
+    close((*pipe_exec)->input);
+    if ((*pipe_exec)->cmds_nbr == 1)
+        output_redirection((*pipe_exec)->outfile, &(*pipe_exec)->output, (*pipe_exec)->save_output);
+    else
+        pipe_redirections((*pipe_exec)->pipe_fd, &(*pipe_exec)->input, &(*pipe_exec)->output);  
+    dup2((*pipe_exec)->output, STDOUT_FILENO);
+    close((*pipe_exec)->output);
+    *id = fork();
+    if (!(*id))
+    {
+        printf("TEST0\n");
+        execve((*pipe_exec)->bin, (*pipe_exec)->newargs, (*pipe_exec)->env);
+        printf("TEST1\n");
+        exit(1);
+    }
+}
+
+int    execute_commands(t_token *token, t_pipe_exec *pipe_exec)
+{
+    int id;
+
+    pipe_exec->save_input = dup(STDIN_FILENO);
+    pipe_exec->save_output = dup(STDOUT_FILENO);
+    input_redirection(pipe_exec->infile, &pipe_exec->input, pipe_exec->save_input);
+    while (pipe_exec->cmds_nbr > 0)
+    {
+        handle_execution(&token, &pipe_exec, &id);
+        pipe_exec->cmds_nbr--;            
+    }
+    restore_fd(pipe_exec->save_input, pipe_exec->save_output);
+    waitpid(id, &pipe_exec->status, 0);
+    free(pipe_exec->newargs);
+    return (0);
+}
+
+void    test(void)
+{
+    printf("OKAY MDR LOL LMAO VRAIMENT MOFO\n");
+}
+
+int move_next_cmds(t_token **token)
+{
+    while (*token)
+    {
+        if ((*token)->type == 9)
+        {
+            *token = (*token)->next;
+            return (1);
+        }
+        if ((*token)->type == 10)
+        {
+            *token = (*token)->next;
+            return (2);
+        }
+        if (!(*token)->next)
+            break ;
+        *token = (*token)->next;
+    }
+    return (-1);
+}
+/*
+int    execute_line(t_token *token, char **env)
+{
+    t_pipe_exec pipe_exec;
+    int continue_exec;
+    int found_cmd;
+
+    continue_exec = 0;
+    while (continue_exec != -1)
+    {
+        determine_in_out(token, &pipe_exec);
+        determine_pipe_num(token, &pipe_exec);
+        pipe_exec.env = env;
+        if (!continue_exec)
+            found_cmd = execute_commands(token, &pipe_exec);
+        else
+        {
+            if (continue_exec == 1 && !pipe_exec.status)
+                found_cmd = execute_commands(token, &pipe_exec);
+            if (continue_exec == 2 && (pipe_exec.status != 0 || found_cmd))
+                found_cmd = execute_commands(token, &pipe_exec);
+        }
+        continue_exec = move_next_cmds(&token);
+    } 
+    return (0);
+}
+*/
 
 int    execute_line(t_token *token, char **env)
 {
     t_pipe_exec pipe_exec;
-    determine_in_out(token, &pipe_exec);
-    //printf("pipe_exec.infile: %s\n", pipe_exec.infile);
-    //printf("pipe_exec.outfile: %s\n", pipe_exec.outfile);
-    determine_cmds_num(token, &pipe_exec);
-    //printf("pipe_exec.cmds_nbr: %d\n", pipe_exec.cmds_nbr);
-    pipe_exec.env = env;
-    if (execute_commands(token, pipe_exec))
-        return (1);
+    int continue_exec;
+    int found_cmd;
+
+    continue_exec = 0;
+    while (continue_exec != -1)
+    {
+        determine_in_out(token, &pipe_exec);
+        determine_pipe_num(token, &pipe_exec);
+        pipe_exec.env = env;
+        if (!continue_exec)
+            found_cmd = execute_commands(token, &pipe_exec);
+        else
+        {
+            if (continue_exec == 1 && !pipe_exec.status)
+                found_cmd = execute_commands(token, &pipe_exec);
+            if (continue_exec == 2 && (pipe_exec.status != 0 || found_cmd))
+                found_cmd = execute_commands(token, &pipe_exec);
+        }
+        continue_exec = move_next_cmds(&token);
+    } 
+    return (0);
 }
 
 /*

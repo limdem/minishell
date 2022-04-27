@@ -62,9 +62,12 @@ typedef struct s_pipe_exec
   int   input;
   int   output;
   int   pipe_fd[2];
+  char  *cmd;
   char  *path;
+  char  *bin;
   char  **newargs;
   char **env;
+  int status;
 } t_pipe_exec;
 
 typedef struct s_minishell
