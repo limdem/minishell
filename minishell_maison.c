@@ -1,70 +1,161 @@
 #include "minishell.h"
 
-
-// A faire = faire la difference entre double quote et single quote
-//         = substitution de commande : une string prend le resultat d'une commande  
-//         = E0F 
-
-
-
+// GERER les >> correctement (e.g creer fichier si existe pas)
+// CHECKER les leaks de la partie exec des que ce sera possible
+// GERER les wildcards
+// GERER les parentheses
+// GERER ./a.out
 
 /* MAN MINISHELL 
     TYPE 1 = WORD
     TYPE 2 = ARGUMENTS
     TYPE 3 = DOUBLE QUOTE
     TYPE 4 = SIMPLE QUOTE
-    TYPE 5 = EXTENSION  PIPE 6 ou 5? on va dire PIPE 5 du coup je pense a voir
-    TYPE 6 = PIPE
+    TYPE 5 = PIPE
+    
     TYPE 7 = INFILE
     TYPE 8 = OUTFILE
     TYPE 9 = &&
     TYPE 10 = ||
     TYPE 11 = (
     TYPE 12 = )
+    TYPE 13 = reserved for extension
+    TYPE 14 = <<
+    TYPE 15 = >>
+    TYPE 16 = *
+    
 */
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////// UTILS //////////////////////////////////////////////////
 
 
-/*If the end of input is recognized, the current token shall be delimited. If there is no current token, the end-of-input indicator shall be returned as the token.
+void	ft_putchar(char c)
+{
+	write (1, &c, 1);
+}
 
-If the previous character was used as part of an operator and the current character is not quoted and can be used with the current characters to form an operator, it shall be used as part of that (operator) token.
+void	ft_putstr(char *str)
+{
+	int i;
 
-If the previous character was used as part of an operator and the current character cannot be used with the current characters to form an operator, the operator containing the previous character shall be delimited.
+	i = 0;
 
-If the current character is backslash, single-quote, or double-quote ( '\', '", or ' )' and it is not quoted, it shall affect quoting for subsequent characters up to the end of the quoted text. 
-The rules for quoting are as described in Quoting. During token recognition no substitutions shall be actually performed, and the result token shall contain exactly the characters that appear in the input (except for <newline> joining),
-unmodified, including any embedded or enclosing quotes or substitution operators, between the quote mark and the end of the quoted text. The token shall not be delimited by the end of the quoted field.
+	while (str[i])
+	{
+		ft_putchar(str[i]);
+		i += 2;
+	}
+}
 
-If the current character is an unquoted '$' or '`', the shell shall identify the start of any candidates for parameter expansion ( Parameter Expansion), 
-command substitution ( Command Substitution), or arithmetic expansion ( Arithmetic Expansion) from their introductory unquoted character sequences: '$' or "${", "$(" or '`', and "$((", respectively. 
-The shell shall read sufficient input to determine the end of the unit to be expanded (as explained in the cited sections). While processing the characters, 
-if instances of expansions or quoting are found nested within the substitution, the shell shall recursively process them in the manner specified for the construct that is found. 
-The characters found from the beginning of the substitution to its end, allowing for any recursion necessary to recognize embedded constructs, shall be included unmodified in the result token, including any embedded or 
-enclosing substitution operators or quotes. The token shall not be delimited by the end of the substitution.
+void	ft_putendl(char *s)
+{
+	ft_putstr(s);
+	write(1, "\n", 1);
+}
 
-If the current character is not quoted and can be used as the first character of a new operator, the current token (if any) shall be delimited. The current character shall be used as the beginning of the next (operator) token.
+size_t	ft_strlen(const char *s)
+{
+	size_t	len;
 
-If the current character is an unquoted <newline>, the current token shall be delimited.
+	len = 0;
+	while (s[len])
+		len++;
+	return (len);
+}
 
-If the current character is an unquoted <blank>, any token containing the previous character is delimited and the current character shall be discarded.
+char	*ft_strjoin(char const *s1, char const *s2)
+{
+	char	*str;
+	int		i;
+	int		j;
 
-If the previous character was part of a word, the current character shall be appended to that word.
+	i = 0;
+	j = 0;
+	if (!s1 || !s2)
+		return (NULL);
+	str = malloc((ft_strlen(s1) + ft_strlen(s2)) * sizeof(char) + 1);
+	if (!str)
+		return (NULL);
+	while (s1[i])
+	{
+		str[i] = s1[i];
+		i++;
+	}
+	while (s2[j])
+	{
+		str[i + j] = s2[j];
+		j++;
+	}
+	str[i + j] = '\0';
+	return (str);
+}
 
-If the current character is a '#', it and all subsequent characters up to, but excluding, the next <newline> shall be discarded as a comment. The <newline> that ends the line is not considered part of the comment.
+char	*ft_substr(char const *s, unsigned int start, size_t len)
+{
+	unsigned int		lenstr;
+	char				*t;
+	int					i;
 
-The current character is used as the start of a new word.*/
+	i = 0;
+	if (!s)
+		return (0);
+	lenstr = strlen(s);
+	if (start >= lenstr)
+	{
+		t = malloc(1);
+		t[0] = '\0';
+		return (t);
+	}
+	if (len > (strlen(s) - start))
+		t = malloc(sizeof(char) * ((strlen(s) - start)) + 1);
+	else
+		t = malloc(sizeof(char) * (len) + 1);
+	if (!(t))
+		return (0);
+	while (len-- && s[start])
+		t[i++] = s[start++];
+	t[i] = '\0';
+	return (t);
+}
 
 void free_list(t_token *token)
 {
     t_token *temp;
 
-    while (token)
+    while (token && token->previous)
     {
         temp = token;
         free(temp);
         token = token->previous;
+        
     }
 }
+
+char	*ft_strdup(const char *s)
+{
+	char	*new_s;
+	int		i;
+
+	new_s = malloc(ft_strlen(s) * sizeof(char) + 1);
+	if (!new_s)
+		return (NULL);
+	i = 0;
+	while (s[i])
+	{
+		new_s[i] = s[i];
+		i++;
+	}
+	new_s[i] = '\0';
+	return (new_s);
+}
+
+///////////////////////////////////////// UTILS //////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////// CREATION DE LIST //////////////////////////////////////////////
 
 int ft_grammar(t_token **token)
 {
@@ -87,69 +178,45 @@ int ft_grammar(t_token **token)
                 printf("bash: syntax error near unexpected token `|'\n");
                 return (0);
         }
+
+        if ((*token)->type == 9 && ((!(*token)->previous) || (!(*token)->next)))
+        {
+                printf("bash: syntax error near unexpected token `&&'\n");
+                return (0);
+        }
+
+        if ((*token)->type == 10 && ((!(*token)->previous) || (!(*token)->next)))
+        {
+                printf("bash: syntax error near unexpected token `&&'\n");
+                return (0);
+        }
+
+        /*if ((*token)->type == 7 && (!(*token)->next))
+        {
+                printf("bash4: syntax error near unexpected token `newline'\n");
+                return (0);
+        }
+
+        if ((*token)->type == 8 && (!(*token)->next))
+        {
+                printf("bash3: syntax error near unexpected token `newline'\n");
+                return (0);
+        }*/
+
+        if ((*token)->type == 15 && ((!(*token)->previous) || (!(*token)->next)))
+        {
+                printf("bash2: syntax error near unexpected token `newline'\n");
+                return (0);
+        }
+
+        if ((*token)->type == 14 && ((!(*token)->next)))
+        {
+                printf("bash1: syntax error near unexpected token `newline'\n");
+                return (0);
+        }
+        
     }
     return (1);
-}
-
-t_extension *set_extension(char *str, t_extension *extension)
-{
-    int i;
-    int a; 
-    int b;
-    int c;
-
-    i = 0;
-    a = 0;
-    b = 0;
-    c = 0;
-    t_extension *new_element;
-    new_element = malloc(sizeof(t_extension));
-    if (!new_element)
-        perror ("MALLOC CREATE VALUE");
-    while (str[i])
-    {
-        while (str[i] && str[i] != '=')
-            i++;
-        a = i;
-        i++;
-        while (str[i])
-            i++;
-        b = (i - a - 1);
-    }
-    new_element->ancient = malloc(sizeof(char *) * a + 1);
-    new_element->new = malloc(sizeof(char *) * b + 1);
-    if (!new_element->ancient || !new_element->new)
-        perror ("MALLOC CREATE STRING VALUE");
-    while (c < a)
-    {
-        new_element->ancient[c] = str[c];
-        c++;
-    }
-    c++;
-    a = 0;
-    while (str[c])
-    {
-        new_element->new[a] = str[c];  //integrer integration dans integration a=test -> b=ert$a --->>> A FAIRE
-        c++;
-        a++;
-    }
-    str[c] = '\0';
-    new_element->previous = extension;
-    return (new_element);
-}
-
-char *check_extension(char *str, t_extension *extension)
-{
-    int i;
-
-    i = 0;
-    while (extension)
-    {
-        if(!strcmp((const char *)extension->ancient, (const char *)str))
-            return(extension->new);
-        extension = extension->previous;
-    }
-    return (str);
 }
 
 t_token *push_empty_list (t_db_list *info, t_token *token, char *str, int type)
@@ -167,7 +234,6 @@ t_token *push_empty_list (t_db_list *info, t_token *token, char *str, int type)
     info->lenght = 1;
     return (new_element);
 }
-
 
 t_token *push_full_list (t_db_list *info, t_token *token, char *str, int type)
 {
@@ -208,6 +274,215 @@ t_db_list *init_list(t_db_list *info)
     return (info);
 }
 
+/////////////////////////////////// CREATION DE LIST //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// BUILD IN ////////////////////////////////////////////////
+
+int check_build_in(t_pipe_exec *pipe_exec)
+{
+    if (!strcmp(pipe_exec->cmd, "exit"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "env"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "export"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "unset"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "pwd"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "echo"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "cd"))
+        return (1); 
+        
+    return (0);
+}
+
+char *check_extension(char *str, char **env)
+{
+    int i;
+    int k;
+    char *result;
+
+    i = 0;
+    k = 0;
+    while (env[i])
+    {
+        if(!strncmp((const char *)env[i], (const char *)str, ft_strlen(str)))
+        {
+            while (env[i][k] != '=')
+                k++;
+            result = ft_substr(env[i], k + 1, ft_strlen(env[i]));
+            return (result);
+        }
+        i++;
+    }
+    result = malloc(sizeof(char*) * 1);
+    if (!result)
+        perror("MALLOC CHECK_EXTENSION");
+    result[0] = 0x00;
+    return (result);
+}
+
+char **export_env(t_token *token, char **env)
+{
+    int i;
+    int k;
+    int l;
+
+    k = 0;
+    i = 0;
+    l = 0;
+
+    while (token->str && token->str[k] != '=')
+        k++;
+    char **new_element;
+    while (env[i])
+        i++;
+    new_element = malloc(sizeof(char **) * i + 1);
+    if (!new_element)
+        perror("MALLOC EXPORT");
+    i = 0;
+    while (env[i])
+    {
+        if (strncmp((const char *)env[i], (const char *)token->str, k))
+            new_element[i] = strdup(env[i]);
+        if (!strncmp((const char *)env[i], (const char *)token->str, k))
+        {
+            new_element[i] = strdup(token->str);
+            l++;
+        }
+        i++;
+    }
+    if (l == 0 )
+        new_element[i] = strdup(token->str);
+    new_element[i + 1] = 0x00;
+    return (new_element);
+}
+
+char **unset_env(t_token *token, char **env)
+{
+    int i;
+    int k;
+    int l;
+    char **new_element;
+
+    k = 0;
+    i = 0;
+    l = 0;
+
+    
+    while (token->str[k])
+        k++;
+    while (env[i])
+    {
+        if (!strncmp((const char *)env[i], (const char *)token->str, k))
+            l = 1;
+        i++;
+    }
+    if (l == 1)
+    {
+        l = 0;
+        new_element = malloc(sizeof(char **) * i + 1);
+        if (!new_element)
+            perror("MALLOC EXPORT");
+        i = 0;
+        while (env[i])
+        {
+            if (strncmp((const char *)env[i], (const char *)token->str, k))
+            {
+                new_element[l] = strdup(env[i]);
+                l++;
+            }
+            i++;
+        }
+        new_element[l] = 0x00;
+        return (new_element);
+    }
+    return (env);
+}
+
+int print_pwd(int size)
+{
+    int i;
+    char buf[size];
+
+    if (getcwd(buf, size) == NULL) 
+    {
+        print_pwd(size + 1);
+        return (0);
+    }
+    printf("%s\n", buf);
+    return (1);
+}
+
+void echo(char **str)
+{
+    int i;
+
+    i = 1;
+
+    if (!strcmp(str[1], "-n"))
+        i++;
+    while (str[i])
+    {
+        printf("%s ", str[i]);
+        i++;
+    }
+    if (strcmp(str[1], "-n"))
+        printf("\n");
+
+}
+
+int build_in (t_token *token, char ***env, t_pipe_exec *pipe_exec)
+{
+    int i;
+
+    i = 0;
+    if (!strcmp(pipe_exec->cmd, "exit"))                   
+        return (1);
+
+    if (!strcmp(pipe_exec->cmd, "env"))                                             
+    {
+        while (env[0][i])
+            printf("%s\n", env[0][i++]);
+        return (1);
+    }
+    if (!strcmp(pipe_exec->cmd, "export"))
+        return (1); 
+    if (!strcmp(pipe_exec->cmd, "unset"))
+        return (1);
+    if (!strcmp(pipe_exec->cmd, "pwd"))
+    {
+        print_pwd(10);
+        return (1);
+    }
+    if (!strcmp(pipe_exec->cmd, "echo")) 
+    {
+        echo(pipe_exec->args);
+        return (1);
+    }
+    if (!strcmp(pipe_exec->cmd, "cd"))    
+    {
+        return (1);
+    }
+    return (0);
+}
+
+//////////////////////////////////////  BUILD IN //////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////// EXECUTION //////////////////////////////////////////////////
+
 void determine_pipe_num(t_token *token, t_pipe_exec *pipe_exec)
 {
     t_token *tmp;
@@ -222,19 +497,22 @@ void determine_pipe_num(t_token *token, t_pipe_exec *pipe_exec)
     }
 }
 
-void    determine_in_out(t_token *token, t_pipe_exec *pipe_exec)
+void    determine_inf_outf(t_token *token, t_pipe_exec *pipe_exec)
 {
     t_token *tmp;
 
     tmp = token;
     pipe_exec->infile = NULL;
     pipe_exec->outfile = NULL;
-    while (tmp && !(tmp->type == 9 || tmp->type == 10))
+    pipe_exec->here_inf = 0;
+    while (tmp && !(tmp->type == 5 || tmp->type == 9 || tmp->type == 10))
     {
         if (tmp->type == 7)
             pipe_exec->infile = tmp->str;
         if (tmp->type == 8)
             pipe_exec->outfile = tmp->str;
+        if (tmp->type == 14)
+            pipe_exec->here_inf = 1;
         tmp = tmp->next;
     }
 }
@@ -245,17 +523,332 @@ void    handle_cmd(t_token **token, t_pipe_exec *pipe_exec)
     while (*token && !((*token)->type == 9 || (*token)->type == 10))
     {
         if ((*token)->type == 1)
-        {
             pipe_exec->cmd = (*token)->str;
-            if ((*token)->next)
-                *token = (*token)->next;
-        }
         if (!(*token)->next || pipe_exec->cmd)
             break;
         *token = (*token)->next;
     }
 }
 
+void	*ft_memcpy(void *dest, const void *src, size_t n)
+{
+	unsigned char		*pt_dest;
+	const unsigned char	*pt_src;
+
+	pt_dest = (unsigned char *)dest;
+	pt_src = (const unsigned char *)src;
+	if (!dest && !src)
+		return (NULL);
+	while (n > 0)
+	{
+		pt_dest[n - 1] = pt_src[n - 1];
+		n--;
+	}
+	return (dest);
+}
+
+char  *determine_chunk(char *wildcard, int *index1, int *index2)
+{ 
+  if (wildcard[*index2] == '*')
+      (*index2)++;
+  while (wildcard[*index2])
+  {
+    if (wildcard[*index2] == '*')
+      break ;
+    (*index2)++;
+  }
+}
+
+void  extract_pattern(char **chunk, int chunk_type)
+{
+    char  *new_chunk;
+    int wildcard_type;
+    int size;
+
+    size = chunk_type;
+    if (!chunk_type)
+        size++;
+    new_chunk = malloc(sizeof(char) * (ft_strlen(*chunk) - size + 1));
+    if (chunk_type == 1)
+        ft_memcpy(new_chunk, *chunk, ft_strlen(*chunk) - size);
+    else
+        ft_memcpy(new_chunk, *chunk + 1, ft_strlen(*chunk) - size);
+    new_chunk[ft_strlen(*chunk) - size] = 0;
+    free(*chunk);
+    *chunk = new_chunk;
+}
+
+void  determine_chunk_type(char *chunk, int *chunk_type)
+{
+  int count;
+  int i;
+
+  count = 0;
+  i = 0;
+  while (chunk[i])
+  {
+    if (chunk[i] == '*')
+      count++;
+    i++;
+  }
+  if (count == 1)
+  {
+    if (chunk[0] == '*')
+      *chunk_type = 0;
+    else
+      *chunk_type = 1;
+  }
+  else
+    *chunk_type = 2;
+}
+
+int check_match_type_0(char **file_name, char *chunk)
+{
+  *file_name += ft_strlen(*file_name) - ft_strlen(chunk);
+  if (!strncmp(*file_name, chunk, ft_strlen(chunk)))
+  {
+    *file_name += ft_strlen(chunk);
+    return (0);
+  }
+  else
+    return (1);
+}
+
+int check_match_type_1(char **file_name, char *chunk)
+{
+  if (!strncmp(*file_name, chunk, ft_strlen(chunk)))
+  {
+    *file_name += ft_strlen(chunk);
+    return (0);
+  }
+  else
+    return (1);
+}
+
+int check_match_type_2(char **file_name, char *chunk)
+{
+  int i;
+
+  i = 0;
+  while ((*file_name)[i])
+  {
+    if (!strncmp(*file_name + i, chunk, ft_strlen(chunk)))
+    {
+      i += ft_strlen(chunk);
+      *file_name += i;
+      return (0);
+    }
+    i++;
+  }
+  return (1);
+}
+
+int  match_pattern(char **file_name, char *chunk, int chunk_type)
+{
+  int match;
+
+  if (chunk_type == 0)
+    match = check_match_type_0(file_name, chunk);
+  if (chunk_type == 1)
+    match = check_match_type_1(file_name, chunk); 
+  if (chunk_type == 2)
+    match = check_match_type_2(file_name, chunk);   
+  if (match)
+    return (1);
+  return (0);
+}
+
+int wildcard_match(char *file_name, char *wildcard)
+{
+    //faire une structure
+  char  *chunk;
+  char  *str;
+  int chunk_type;
+  int file_match;
+  int i;
+  int j;
+
+  file_match = 1;
+  i = 0;
+  j = 0;
+  while (wildcard[i])
+  {
+    determine_chunk(wildcard, &i, &j);
+    chunk = malloc(sizeof(char) * (j + 1 - i + 1));
+    ft_memcpy(chunk, wildcard + i, j + 1 - i);
+    chunk[j + 1 - i + 1] = 0;
+    determine_chunk_type(chunk, &chunk_type);
+    extract_pattern(&chunk, chunk_type);
+    if (match_pattern(&file_name, chunk, chunk_type))
+      return (1);
+    if (!wildcard[j + 1])
+      break ;
+    i = j;  
+  }
+  if (file_match)
+    return (0);
+  return (1);
+}
+
+void    count_wild_args(char *wildcard, int *args_nbr)
+{
+    DIR *folder;
+    struct dirent *entry;
+    int read;
+
+    folder = opendir(".");
+    if (folder == NULL)
+        return ;
+    read = 1;
+    while (read)
+    {
+        entry = readdir(folder);
+        if (!entry)
+            read = 0;
+        else        
+            if (!wildcard_match(entry->d_name, wildcard))
+                (*args_nbr)++; 
+    }
+}
+
+void   fill_tmp_array(char  **tmp_arr, char *wildcard, int args_nbr)
+{
+    DIR *folder;
+    struct dirent *entry;
+    int read;
+
+    folder = opendir(".");
+    if (folder == NULL)
+        return ;
+    read = 1;
+    tmp_arr[args_nbr] = NULL;  
+    while (read)
+    {
+        entry = readdir(folder);
+        if (!entry)
+            read = 0;
+        else        
+            if (!wildcard_match(entry->d_name, wildcard))
+            {
+                tmp_arr[args_nbr - 1] = entry->d_name;
+                args_nbr--;
+            }
+    }
+}
+
+int	ft_strcmp(const char *s1, const char *s2)
+{
+	size_t	i;
+
+	i = 0;
+	while (s1[i] && s2[i])
+	{
+		if (s1[i] != s2[i])
+			return ((unsigned char)s1[i] - (unsigned char)s2[i]);
+		if (s1[i] == '\0' || s2[i] == '\0')
+			return (0);
+		i++;
+	}	
+	return (0);
+}
+
+void    sort_array(char  **tmp_arr, int args_nbr)
+{
+    int is_sorted;
+    int i;
+    char    *tmp_swap;
+
+    is_sorted = 1;   
+    while (is_sorted)
+    {
+        is_sorted = 0;
+        i = 0;
+        while (i < args_nbr - 1)
+        {
+            if (ft_strcmp(tmp_arr[i], tmp_arr[i + 1]) > 0)
+            {
+                tmp_swap = tmp_arr[i];
+                tmp_arr[i] = tmp_arr[i + 1];
+                tmp_arr[i + 1] = tmp_swap;
+                is_sorted = 1;
+            }
+            i++;
+        }
+    }
+}
+
+void    prepare_wild_args_arr(char **args, char **tmp_arr, int args_nbr, int index)
+{
+    int i;
+
+    i = 0;
+    while (i < args_nbr)
+    {
+        args[index] = tmp_arr[i];
+        index++;
+        i++;
+    }
+}
+
+int    handle_wild_args(char *wildcard, char  **args, int *index)
+{
+    DIR *folder;
+    struct dirent *entry;
+    char    **tmp_arr;
+    int read;
+    int args_nbr;
+
+    args_nbr = 0;
+    count_wild_args(wildcard, &args_nbr);
+    tmp_arr = malloc((args_nbr + 1) * sizeof(char *));
+    if (!tmp_arr)
+        return (1);
+    fill_tmp_array(tmp_arr, wildcard, args_nbr);
+    sort_array(tmp_arr, args_nbr);
+    prepare_wild_args_arr(args, tmp_arr, args_nbr, *index);
+    *index += args_nbr;
+}
+/*
+void    handle_args(t_token **token, t_pipe_exec *pipe_exec)
+{
+    t_token *tmp;
+    int i;
+
+    tmp = *token;
+    pipe_exec->args_nbr = -1;
+    i = -1;  
+    // faire une fonction
+    while (tmp && (tmp->type == 1 || tmp->type == 16))
+    {
+        if (tmp->type == 16)
+            count_wild_args(tmp->str, &pipe_exec->args_nbr);   
+        else
+            pipe_exec->args_nbr++;
+        tmp = tmp->next;
+    }
+    //
+    pipe_exec->args = malloc((pipe_exec->args_nbr + 2) * sizeof(char *));
+    pipe_exec->args[++i] = pipe_exec->cmd;
+    if (*token)
+        (*token) = (*token)->next;
+    i++;
+    while (*token && ((*token)->type == 1 || (*token)->type == 16))
+    {
+        if ((*token)->type == 16)
+            handle_wild_args((*token)->str, pipe_exec->args, &i);
+        else
+        {
+            if (i < pipe_exec->args_nbr + 1)
+            {
+                pipe_exec->args[i] = (*token)->str;
+                i++;
+            } 
+        }        
+        *token = (*token)->next;
+    }
+    pipe_exec->args[i] = NULL; 
+}
+*/
 
 void    handle_args(t_token **token, t_pipe_exec *pipe_exec)
 {
@@ -263,79 +856,33 @@ void    handle_args(t_token **token, t_pipe_exec *pipe_exec)
     int i;
 
     tmp = *token;
-    pipe_exec->args_nbr = 0;
-    i = -1;
-    while (tmp && !(tmp->type == 9 || tmp->type == 10 || tmp->type == 5))
+    pipe_exec->args_nbr = -1;
+    i = -1;  
+    // faire une fonction
+    while (tmp && (tmp->type == 1 || tmp->type == 16))
     {
-        if (tmp->type == 2)
+        if (tmp->type == 16)
+            count_wild_args(tmp->str, &pipe_exec->args_nbr);   
+        else
             pipe_exec->args_nbr++;
         tmp = tmp->next;
     }
-    pipe_exec->newargs = malloc((pipe_exec->args_nbr + 2) * sizeof(char *));
-    pipe_exec->newargs[++i] = pipe_exec->cmd;
-    while (*token && (*token)->type == 2)
+    //
+    pipe_exec->args = malloc((pipe_exec->args_nbr + 2) * sizeof(char *));
+    pipe_exec->args[++i] = pipe_exec->cmd;
+    if (*token)
+        (*token) = (*token)->next;
+    i++;
+    while (*token && ((*token)->type == 1 || (*token)->type == 16))
     {
-        pipe_exec->newargs[++i] = (*token)->str;
-        if (!(*token)->next)
-            break;
+        if ((*token)->type == 16)
+            handle_wild_args((*token)->str, pipe_exec->args, &i);
+        else
+            if (i < pipe_exec->args_nbr + 1)
+                pipe_exec->args[i++] = (*token)->str;       
         *token = (*token)->next;
     }
-    pipe_exec->newargs[i + 1] = NULL;
-}
-
-size_t	ft_strlen(const char *s)
-{
-	size_t	len;
-
-	len = 0;
-	while (s[len])
-		len++;
-	return (len);
-}
-
-char	*ft_strjoin(char const *s1, char const *s2)
-{
-	char	*str;
-	int		i;
-	int		j;
-
-	i = 0;
-	j = 0;
-	if (!s1 || !s2)
-		return (NULL);
-	str = malloc((ft_strlen(s1) + ft_strlen(s2)) * sizeof(char) + 1);
-	if (!str)
-		return (NULL);
-	while (s1[i])
-	{
-		str[i] = s1[i];
-		i++;
-	}
-	while (s2[j])
-	{
-		str[i + j] = s2[j];
-		j++;
-	}
-	str[i + j] = '\0';
-	return (str);
-}
-
-char	*ft_strdup(const char *s)
-{
-	char	*new_s;
-	int		i;
-
-	new_s = malloc(ft_strlen(s) * sizeof(char) + 1);
-	if (!new_s)
-		return (NULL);
-	i = 0;
-	while (s[i])
-	{
-		new_s[i] = s[i];
-		i++;
-	}
-	new_s[i] = '\0';
-	return (new_s);
+    pipe_exec->args[i] = NULL; 
 }
 
 void    determine_path(char *cmd, char **path, char **env)
@@ -356,163 +903,153 @@ void    determine_path(char *cmd, char **path, char **env)
     *path = env[i];
 }
 
-int determine_cmd_no_path(char **bin, char *cmd, char *path)
+int determine_cmd_no_path(t_pipe_exec *pipe_exec)
 {
     int fd;
 
-    *bin = ft_strdup(cmd);
-    if (!(*bin))
+    pipe_exec->cmd = ft_strdup(pipe_exec->cmd);
+    if (!(pipe_exec->cmd))
         return (1);
-    fd = access(*bin, F_OK & W_OK);
-    if (fd == -1)
-        return (1);
-    return (0);
+    pipe_exec->args[0] = pipe_exec->cmd;
+    if (pipe_exec->here_inf)
+    {
+        //close(pipe_exec->here_pipe_fd[0]);
+        close(pipe_exec->here_pipe_fd[1]);
+    }
+    execve(pipe_exec->args[0], pipe_exec->args, *pipe_exec->env);
+    write(2, "minishell: ", 11);
+    perror(pipe_exec->cmd);
+    free(pipe_exec->args[0]);
+    free(pipe_exec->args);
 }
 
-
-int determine_cmd_path(char **bin, char *cmd, char *path)
+int determine_cmd_path(t_pipe_exec *pipe_exec)
 {
-    int fd;
     int i;
     char    *tmp;
+    char    *save_cmd;
 
-    fd = -1;
-    path += 5;
-    while (fd == -1 && path[i])
+    i = 0;
+    pipe_exec->path += 5;
+    save_cmd = pipe_exec->cmd;
+    //printf("OKAY1\n");
+    while (pipe_exec->path[i])
     {
         i = 0;
-        while (path[i] && path[i] != ':')
+        // faire une fonction pour raccourcir
+        while (pipe_exec->path[i] && pipe_exec->path[i] != ':')
             i++;
-        path[i] = 0;
-        tmp = ft_strjoin(path, "/");
-        *bin = ft_strjoin(tmp, cmd);
-        if (!tmp || !(*bin))
+        pipe_exec->path[i] = 0;
+        tmp = ft_strjoin(pipe_exec->path, "/");
+        pipe_exec->cmd = ft_strjoin(tmp, pipe_exec->cmd);
+        if (!tmp || !(pipe_exec->cmd))
             return (1);
         free(tmp);
-        fd = access(*bin, F_OK & W_OK);
+        //
+        pipe_exec->args[0] = pipe_exec->cmd;
+        if (pipe_exec->here_inf)
+        {
+            //close(pipe_exec->here_pipe_fd[0]);
+            close(pipe_exec->here_pipe_fd[1]);
+        }
+        execve(pipe_exec->args[0], pipe_exec->args, *pipe_exec->env);
+        free(pipe_exec->args[0]);
         i++;
-        path = path + i;
+        pipe_exec->path +=  i;
+        pipe_exec->cmd = save_cmd;
     }
-    if (fd == -1)
-        return (1);
-    else
-        return (0);
+    write(2, "minishell: ", 11);
+    perror(pipe_exec->cmd);
+    free(pipe_exec->args);
 }
-
+/*
 int handle_cmd_args(t_token **token, t_pipe_exec *pipe_exec)
 {
     int found;
     
     handle_cmd(token, pipe_exec);
     handle_args(token, pipe_exec);
-    determine_path(pipe_exec->cmd, &pipe_exec->path, pipe_exec->env);
+    /*
+    if (check_build_in(pipe_exec))
+        return (0);
+
+    determine_path(pipe_exec->cmd, &pipe_exec->path, *pipe_exec->env);
     if (!pipe_exec->path)
-        found = determine_cmd_no_path(&pipe_exec->bin, pipe_exec->cmd, pipe_exec->path);
+        found = determine_cmd_no_path(pipe_exec->cmd, pipe_exec->args, *pipe_exec->env);
     else
         found = determine_cmd_path(&pipe_exec->bin, pipe_exec->cmd, pipe_exec->path);
     if (found)
         return (1);
     return (0);
 }
-// SEGFAULT SI AUCUNE ENTREE
-// GERER les >> correctement (e.g creer fichier si existe pas)
-// CHECKER les leaks de la partie exec des que ce sera possible
-// GERER les wildcards
-// GERER les parentheses
-// GERER ./a.out
-
-/*
-int    execute_commands(t_token *token, t_pipe_exec *pipe_exec)
-{
-    int id;
-
-    pipe_exec->save_input = dup(STDIN_FILENO);
-    pipe_exec->save_output = dup(STDOUT_FILENO);
+*/
+int    infile_redirection(t_pipe_exec *pipe_exec)
+{  
     if (pipe_exec->infile)
     {
+        //close(*input);
         pipe_exec->input = open(pipe_exec->infile, O_RDONLY);
         if (pipe_exec->input == -1)
             return (1);
     }
-    else
+    
+    if (pipe_exec->here_inf)
+    {
+        if (pipe(pipe_exec->here_pipe_fd) == -1)
+            return (1);
+        pipe_exec->input = pipe_exec->here_pipe_fd[0];
+    }
+    
+    if (!(pipe_exec->infile || pipe_exec->here_inf) && pipe_exec->first_cmd)
+    {
+        //close(*input);
         pipe_exec->input = dup(pipe_exec->save_input);
-    while (pipe_exec->cmds_nbr > 0)
-    {
-        if (handle_cmd_args(&token, pipe_exec))
-            return (1);
-        dup2(pipe_exec->input, STDIN_FILENO);
-        close(pipe_exec->input);
-        if (pipe_exec->cmds_nbr == 1)
-        {
-            if (pipe_exec->outfile)
-            {
-                pipe_exec->output = open(pipe_exec->outfile, O_RDONLY);
-                if (pipe_exec->output == -1)
-                    return (1);
-            }
-            else
-                pipe_exec->output = dup(pipe_exec->save_output);
-        
-        }
-        else
-        {
-            pipe(pipe_exec->pipe_fd);
-            pipe_exec->input = pipe_exec->pipe_fd[0];
-            pipe_exec->output = pipe_exec->pipe_fd[1];    
-        }
-        dup2(pipe_exec->output, STDOUT_FILENO);
-        close(pipe_exec->output);
-        id = fork();
-        if (!id)
-        {
-            execve(pipe_exec->bin, pipe_exec->newargs, pipe_exec->env);
-            exit(1);
-        } 
-        pipe_exec->cmds_nbr--;            
-
     }
-    dup2(pipe_exec->save_input, STDIN_FILENO);
-    dup2(pipe_exec->save_output, STDOUT_FILENO);
-    close(pipe_exec->save_input);
-    close(pipe_exec->save_output);
-    waitpid(id, &pipe_exec->status, 0);
-    free(pipe_exec->newargs);
-    return (0);
-}
-*/
+    //if (!infile && !first_cmd)
 
-int    input_redirection(char  *infile, int   *input, int save_input)
-{
-    if (infile)
-    {
-        *input = open(infile, O_RDONLY);
-        if (*input == -1)
-            return (1);
-    }
-    else
-        *input = dup(save_input);
     return (0);
 }
 
-int    output_redirection(char  *outfile, int   *output, int save_output)
+int    outfile_redirection(char  *outfile, int   *output, int save_output, int cmds_nbr, char *cmd)
 {
+    FILE *ptr = stderr;
+
+
     if (outfile)
     {
+        //close(*output);
+        //fprintf(ptr, "ICI0\n");
         *output = open(outfile, O_CREAT | O_WRONLY, 0664);
         if (*output == -1)
             return (1);
     }
-    else
+    if (!outfile && cmds_nbr == 1)
+    {
+        //fprintf(ptr, "ICI1\n");
+        //fprintf(ptr, "cmd: %s\n", cmd);
+        
         *output = dup(save_output);
+    }
     return (0);
 }
 
-int pipe_redirections(int   pipe_fd[2], int *input, int *output)
+int pipe_redirections(int   pipe_fd[2], int *input, int *output, int first_cmd)
 {
-    if (pipe(pipe_fd) == -1)
-        return (1);
-    *input = pipe_fd[0];
-    *output = pipe_fd[1];
+
+    if (first_cmd)
+    {
+        if (pipe(pipe_fd) == -1)
+            return (1);
+        *input = pipe_fd[0];
+        *output = pipe_fd[1];
+    }
+    else
+    {
+        *input = pipe_fd[0];
+        if (pipe(pipe_fd) == -1)
+            return (1);
+       *output = pipe_fd[1];
+    }
     return (0);
 }
 
@@ -524,52 +1061,206 @@ void    restore_fd(int save_input, int save_output)
     close(save_output);
 }
 
-int handle_execution(t_token **token, t_pipe_exec **pipe_exec, int *id)
+int handle_execve(t_token **token, t_pipe_exec *pipe_exec)
 {
-    if (handle_cmd_args(token, *pipe_exec))
-        return (1);
-    dup2((*pipe_exec)->input, STDIN_FILENO);
-    close((*pipe_exec)->input);
-    if ((*pipe_exec)->cmds_nbr == 1)
-        output_redirection((*pipe_exec)->outfile, &(*pipe_exec)->output, (*pipe_exec)->save_output);
+    FILE *ptr = stderr;
+
+    handle_cmd(token, pipe_exec);
+    
+    handle_args(token, pipe_exec);
+    determine_path(pipe_exec->cmd, &pipe_exec->path, *pipe_exec->env);
+    if (!pipe_exec->path)
+        determine_cmd_no_path(pipe_exec);
     else
-        pipe_redirections((*pipe_exec)->pipe_fd, &(*pipe_exec)->input, &(*pipe_exec)->output);  
-    dup2((*pipe_exec)->output, STDOUT_FILENO);
-    close((*pipe_exec)->output);
-    *id = fork();
-    if (!(*id))
-    {
-        printf("TEST0\n");
-        execve((*pipe_exec)->bin, (*pipe_exec)->newargs, (*pipe_exec)->env);
-        printf("TEST1\n");
-        exit(1);
-    }
-}
-
-int    execute_commands(t_token *token, t_pipe_exec *pipe_exec)
-{
-    int id;
-
-    pipe_exec->save_input = dup(STDIN_FILENO);
-    pipe_exec->save_output = dup(STDOUT_FILENO);
-    input_redirection(pipe_exec->infile, &pipe_exec->input, pipe_exec->save_input);
-    while (pipe_exec->cmds_nbr > 0)
-    {
-        handle_execution(&token, &pipe_exec, &id);
-        pipe_exec->cmds_nbr--;            
-    }
-    restore_fd(pipe_exec->save_input, pipe_exec->save_output);
-    waitpid(id, &pipe_exec->status, 0);
-    free(pipe_exec->newargs);
+        determine_cmd_path(pipe_exec);
     return (0);
 }
 
-void    test(void)
+void    inf_outf_redirections(t_token *token, t_pipe_exec *pipe_exec)
 {
-    printf("OKAY MDR LOL LMAO VRAIMENT MOFO\n");
+    FILE *ptr = stderr;
+    determine_inf_outf(token, pipe_exec);
+    //printf("pipe_exec->here_inf: %d\n", pipe_exec->here_inf);
+    
+    //infile_redirection(pipe_exec->infile, &pipe_exec->input, pipe_exec->save_input, pipe_exec->first_cmd);
+    infile_redirection(pipe_exec);
+    
+    outfile_redirection(pipe_exec->outfile, &pipe_exec->output, pipe_exec->save_output, pipe_exec->cmds_nbr, token->str);
+    
 }
 
-int move_next_cmds(t_token **token)
+void    write_here_doc(int  here_pipe_fd_out,   t_token **here_doc_tab, int *here_doc_tab_index)
+{
+    //write(here_pipe_fd_out, , 5);
+    int i;
+    int j;
+
+    i = 0;
+    FILE *ptr = stderr;
+    /*
+    while (here_doc_tab[i])
+    {   
+        //j = 0;
+        while (here_doc_tab[i])
+        {
+            //write(here_pipe_fd_out, &here_doc_tab[i]->str[j], 1);
+            //printf("%s", here_doc_tab[i]->str);
+            j = 0;
+            while (here_doc_tab[i]->str[j])
+            {
+                write(here_pipe_fd_out, &here_doc_tab[i]->str[j], 1);
+                j++;
+            }
+            here_doc_tab[i] = here_doc_tab[i]->next;
+        }
+        
+        
+        i++;
+    }
+    */  
+    //j = 0;
+    while (here_doc_tab[*here_doc_tab_index])
+    {
+        //write(here_pipe_fd_out, &here_doc_tab[i]->str[j], 1);
+        //fprintf(ptr, "la: %d\n", *here_doc_tab_index);
+        //fprintf(ptr, "la: %s\n", here_doc_tab[*here_doc_tab_index]->str);
+        j = 0;
+        
+        while (here_doc_tab[*here_doc_tab_index]->str[j])
+        {
+            write(here_pipe_fd_out, &here_doc_tab[*here_doc_tab_index]->str[j], 1);
+            j++;
+        }
+        
+        here_doc_tab[*here_doc_tab_index] = here_doc_tab[*here_doc_tab_index]->next;
+        
+    }
+    (*here_doc_tab_index)++;   
+    //*here_doc_tab_index = 1;
+        
+    
+   
+    close(here_pipe_fd_out);
+}
+
+int handle_execution(t_token **token, t_pipe_exec *pipe_exec, int *pid)
+{
+    char *str;
+    char line [100];
+    int i = 0;
+    FILE *ptr = stderr;
+    /*
+    if (handle_cmd_args(token, pipe_exec))
+        return (1);
+    */
+    /*
+    if ((*pipe_exec)->here_doc != -1)
+        (*pipe_exec)->input = (*pipe_exec)->here_doc;
+    */
+    //printf("fichier = %d",(*pipe_exec)->input);
+
+    
+    //peut etre mettre pipe_fd en variable locale
+    pipe_redirections(pipe_exec->pipe_fd, &pipe_exec->input, &pipe_exec->output, pipe_exec->first_cmd);
+    //printf("pipe_exec->pipe_fd[0]: %d\n", pipe_exec->pipe_fd[0]);
+    
+    inf_outf_redirections(*token, pipe_exec);
+    //fprintf(ptr, "pipe_exec->cmds_nbr6673: %d\n", pipe_exec->cmds_nbr);
+
+    dup2(pipe_exec->input, STDIN_FILENO);
+    close(pipe_exec->input);
+    dup2(pipe_exec->output, STDOUT_FILENO);
+    close(pipe_exec->output);
+
+    //printf("pipe_exec->input: %d\n", pipe_exec->input);
+    //determine_inf_outf(*token, pipe_exec);
+    //printf("pipe_exec->infile: %s\n", pipe_exec->infile);
+    //printf("pipe_exec->outfile: %s\n", pipe_exec->outfile);
+    
+    //dup2(pipe_exec->input, STDIN_FILENO);
+
+    //close(pipe_exec->input);
+
+
+    /*
+    if (pipe_exec->cmds_nbr == 1)
+        output_redirection(pipe_exec->outfile, &pipe_exec->output, pipe_exec->save_output);
+    
+    else
+        pipe_redirections(pipe_exec->pipe_fd, &pipe_exec->input, &pipe_exec->output);
+    dup2(pipe_exec->output, STDOUT_FILENO);
+    close(pipe_exec->output);
+    */
+    
+    *pid = fork();
+    
+    
+    if (!(*pid))
+    {
+
+        
+        //if (!build_in(*token, pipe_exec->env, *pipe_exec))
+        //fprintf(fptr,"(*token)->str_before: %s\n", (*token)->str);
+        
+        //if (pipe_exec->cmds_nbr != 1)
+        //    close(pipe_exec->input);
+        
+        //close(pipe_exec->input);
+        close(pipe_exec->pipe_fd[0]);
+        close(pipe_exec->pipe_fd[1]);
+        close(pipe_exec->save_input);
+        close(pipe_exec->save_output);
+        handle_execve(token, pipe_exec);      
+        exit(127);
+    }
+    if (pipe_exec->here_inf)
+    {
+        //fprintf(ptr, "ici0: %d\n", pipe_exec->here_doc_tab_index);
+        //fprintf(ptr, "ici0: %s\n", pipe_exec->here_doc_tab_index[pipe_exec->here_doc_tab_index]->str);
+        write_here_doc(pipe_exec->here_pipe_fd[1], pipe_exec->here_doc_tab, &pipe_exec->here_doc_tab_index);
+        //fprintf(ptr, "ici1: %d\n", pipe_exec->here_doc_tab_index);
+    }
+    /*
+    if (pipe_exec->first_cmd && pipe_exec->cmds_nbr == 1)
+    {
+        close(pipe_exec->pipe_fd[0]);
+        close(pipe_exec->pipe_fd[1]);
+    }
+    */
+    /*
+    pipe_exec->input = pipe_exec->pipe_fd[0];
+    pipe_exec->output = pipe_exec->pipe_fd[1];
+    */
+    /*
+    if (*id)
+    {       
+        if (!strcmp((*pipe_exec)->cmd, "cd"))
+        {
+            if(chdir((const char *)(*pipe_exec)->args[1]) == -1)
+                fprintf(stderr, "%d\n", errno);
+            return (1);
+        }
+        if (!strcmp((*pipe_exec)->cmd, "export"))
+        {
+            if ((*token)->type == 13)
+                *env = export_env(*token, *env);
+            return (1);
+        }
+        if (!strcmp((*pipe_exec)->cmd, "unset"))
+        {
+            if ((*token)->type == 2)
+                *env = unset_env(*token, *env);
+        }
+        if (!strcmp((*pipe_exec)->cmd, "exit"))                
+            exit(0); 
+    }
+    */
+    //printf("ICI\n");
+    return (1);
+
+}
+/*
+int move_next_cmds(t_token **token, int status)
 {
     while (*token)
     {
@@ -589,126 +1280,347 @@ int move_next_cmds(t_token **token)
     }
     return (-1);
 }
+*/
+
+int find_operator(t_token **token)
+{
+    while (*token)
+    {
+        if ((*token)->type == 9)
+        {
+            *token = (*token)->next;
+            return (1);
+        }
+        if ((*token)->type == 10)
+        {
+            *token = (*token)->next;
+            return (2);
+        }
+        if (!(*token)->next)
+            return (-1);
+        *token = (*token)->next;
+    }
+}
+
+int handle_continue(t_token **token, int status, int operator)
+{
+    if (operator == 1 && !status)
+        return (0);
+    if (operator == 2 && status)
+        return (0);   
+    return (1);
+}
+
 /*
-int    execute_line(t_token *token, char **env)
+int move_next_cmds(t_token **token, int status)
+{
+    int operator;
+    int continue_exec;
+
+    continue_exec = 1;
+    while (continue_exec)
+    {
+        operator = find_operator(token);
+        if (operator == -1)
+            return (-1);
+        continue_exec = handle_continue(token, status, operator);
+        //printf("continue_exec0: %d\n", continue_exec);
+        if (!continue_exec)
+            return (0);
+        
+        //printf("operator: %d\n", operator);
+        //printf("(*token)->str0: %s\n", (*token)->str);
+
+        if ((*token)->type == 11)
+        {
+            //printf("ICI\n");
+            while ((*token)->type != 12)
+            {
+                //printf("(*token)->str1: %s\n", (*token)->str);
+                //printf("(*token)->type: %d\n", (*token)->type);
+                *token = (*token)->next;
+            }
+            //printf("(*token)->str1: %s\n", (*token)->str);
+        }
+        else
+        {
+            while (*token && ((*token)->type != 9 && (*token)->type != 10))
+            {
+                //printf("ICI2\n");
+                if ((*token)->next)
+                    *token = (*token)->next;
+                else
+                    return (-1);
+            }
+            //*token = (*token)->next;    
+            //if ((*token)->str)
+            //    printf("(*token)->str1: %s\n", (*token)->str);
+        }
+        //return (1);
+    }
+    return (0);
+}
+*/
+
+int move_next_cmds(t_token **token, int status)
+{
+    int operator;
+    int continue_exec;
+
+    continue_exec = 1;
+    while (continue_exec)
+    {
+        operator = find_operator(token);
+        if (operator == -1)
+            return (-1);
+        continue_exec = handle_continue(token, status, operator);
+        if (!continue_exec)
+            return (0);
+        // faire une fonction
+        if ((*token)->type == 11)
+        {
+            while ((*token)->type != 12)
+                *token = (*token)->next;
+        }
+        else
+        {
+            while (*token && ((*token)->type != 9 && (*token)->type != 10))
+            {
+                if ((*token)->next)
+                    *token = (*token)->next;
+                else
+                    return (-1);
+            }
+        }
+        //
+    }
+    return (0);
+}
+
+int move_next_cmds_pipe(t_token **token)
+{
+    while (*token)
+    {
+        if ((*token)->type == 5)
+        {
+            *token = (*token)->next;
+            return (1);
+        }
+        if (!(*token)->next)
+            break ;
+        *token = (*token)->next;
+    }
+    return (-1);
+}
+
+int    execute_commands(t_token *token, t_pipe_exec *pipe_exec)
+{
+    int pid;
+
+    pipe_exec->first_cmd = 1;
+    pipe_exec->save_input = dup(STDIN_FILENO);
+    pipe_exec->save_output = dup(STDOUT_FILENO);
+    //input_redirection(pipe_exec->infile, &pipe_exec->input, pipe_exec->save_input); A GERER AU NIVEAU DE CHAQUE COMMANDE
+    determine_pipe_num(token, pipe_exec);
+    
+    
+    while (pipe_exec->cmds_nbr > 0)
+    {
+        handle_execution(&token, pipe_exec, &pid);
+        //printf("pipe_exec->here_doc_tab_index: %d\n", pipe_exec->here_doc_tab_index);
+        pipe_exec->cmds_nbr--;
+        if (pipe_exec->cmds_nbr > 0)
+            move_next_cmds_pipe(&token);
+        pipe_exec->first_cmd = 0;        
+    }
+    restore_fd(pipe_exec->save_input, pipe_exec->save_output);
+    waitpid(pid, &pipe_exec->status, 0);
+    //printf("pipe_exec->status: %d\n", WEXITSTATUS(pipe_exec->status));
+    pipe_exec->status = WEXITSTATUS(pipe_exec->status);
+    while (wait(NULL) != -1);
+    close(pipe_exec->save_input);
+    close(pipe_exec->save_output);
+    //free(pipe_exec->args);
+    
+    return (0);
+}
+/*
+int    execute_line(t_minishell *minishell)
 {
     t_pipe_exec pipe_exec;
     int continue_exec;
-    int found_cmd;
 
+    pipe_exec.env = minishell->env;
+    pipe_exec.here_doc_tab = minishell->here_doc_tab;
+    pipe_exec.here_doc_tab_index = 0;
     continue_exec = 0;
     while (continue_exec != -1)
     {
-        determine_in_out(token, &pipe_exec);
-        determine_pipe_num(token, &pipe_exec);
-        pipe_exec.env = env;
+        //determine_in_out(minishell->token, &pipe_exec); A GERER AU NIVEAU DE CHAQUE COMMANDE
+        //determine_pipe_num(minishell->token, &pipe_exec); A GERER AU NIVEAU DE PIPEX
+        //pipe_exec.env = minishell->env; A GERER AU NIVEAU DE CHAQUE COMMANDE
+        //pipe_exec.here_doc = minishell->here_doc; A GERER AU NIVEAU DE CHAQUE COMMANDE
         if (!continue_exec)
-            found_cmd = execute_commands(token, &pipe_exec);
+            execute_commands(minishell->token, &pipe_exec);
         else
         {
             if (continue_exec == 1 && !pipe_exec.status)
-                found_cmd = execute_commands(token, &pipe_exec);
-            if (continue_exec == 2 && (pipe_exec.status != 0 || found_cmd))
-                found_cmd = execute_commands(token, &pipe_exec);
+                execute_commands(minishell->token, &pipe_exec);
+            if (continue_exec == 2 && pipe_exec.status != 0)
+                execute_commands(minishell->token, &pipe_exec);
         }
-        continue_exec = move_next_cmds(&token);
+        continue_exec = move_next_cmds(&minishell->token);
     } 
     return (0);
 }
 */
 
-int    execute_line(t_token *token, char **env)
+int    execute_line(t_minishell *minishell)
 {
     t_pipe_exec pipe_exec;
     int continue_exec;
-    int found_cmd;
 
+    pipe_exec.env = minishell->env;
+    pipe_exec.here_doc_tab = minishell->here_doc_tab;
+    pipe_exec.here_doc_tab_index = 0;
     continue_exec = 0;
     while (continue_exec != -1)
     {
-        determine_in_out(token, &pipe_exec);
-        determine_pipe_num(token, &pipe_exec);
-        pipe_exec.env = env;
-        if (!continue_exec)
-            found_cmd = execute_commands(token, &pipe_exec);
-        else
-        {
-            if (continue_exec == 1 && !pipe_exec.status)
-                found_cmd = execute_commands(token, &pipe_exec);
-            if (continue_exec == 2 && (pipe_exec.status != 0 || found_cmd))
-                found_cmd = execute_commands(token, &pipe_exec);
-        }
-        continue_exec = move_next_cmds(&token);
+        //determine_in_out(minishell->token, &pipe_exec); A GERER AU NIVEAU DE CHAQUE COMMANDE
+        //determine_pipe_num(minishell->token, &pipe_exec); A GERER AU NIVEAU DE PIPEX
+        //pipe_exec.env = minishell->env; A GERER AU NIVEAU DE CHAQUE COMMANDE
+        //pipe_exec.here_doc = minishell->here_doc; A GERER AU NIVEAU DE CHAQUE COMMANDE
+        execute_commands(minishell->token, &pipe_exec);
+        continue_exec = move_next_cmds(&minishell->token, pipe_exec.status);
+        //printf("continue_exec1: %d\n", continue_exec);
     } 
     return (0);
 }
 
-/*
-t_db_list *init_minishell(t_token **token, t_extension **extension, char *env[], t_db_list *info)
+////////////////////////////////////// EXECUTION //////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+void		ft_putstr_fd(char const *s, int fd)
 {
-
-    *token = NULL;
-    *extension = NULL;
-    info = init_list(info);
-    return (info);
+	write(fd, s, ft_strlen(s));
 }
-*/
 
-t_db_list *init_minishell(t_minishell *minishell, char *env[])
+t_db_list *init_minishell(t_minishell *minishell, char **env[])
 {
     minishell->env = env;
     minishell->token = NULL;
     minishell->extension = NULL;
     minishell->info = init_list(minishell->info);
+    minishell->grammar = 1;
+    minishell->here_doc = -1;
+    minishell->quote = 0;
     return (minishell->info);
 }
+
+void	handler(int code)
+{
+    if (code == SIGINT)
+    {
+	    //(exit_status à 1 (comportement similaire à celui de Bash)
+        rl_replace_line("", 0); //(vide le buffer de readline)
+        ft_putendl("");
+        rl_on_new_line(); //(changement de ligne)
+        rl_replace_line("", 0); //(vide le buffer de readline)
+        rl_redisplay(); //(affiche la nouvelle ligne) En gros, on quitte la ligne courante pour afficher un nouveau prompt sur une nouvelle ligne.
+    }
+
+    if (code == SIGQUIT)
+    {
+	    
+    }
+}
+
+
+
+
 
 int main(int argc, char *argv[], char *env[])
 {
     t_minishell minishell;
+    struct sigaction prepaSignal;
 
-    minishell.info = init_minishell(&minishell, env);
-    while ((minishell.line = readline("minishell$ ")))
+    minishell.info = init_minishell(&minishell, &env);
+
+    prepaSignal.sa_handler=&handler;
+    sigaction(SIGINT,&prepaSignal,0);
+    sigaction(SIGQUIT,&prepaSignal,0);
+    minishell.line = readline("minishell$ ");
+    prepaSignal.sa_handler=SIG_IGN;
+
+    while (minishell.line)
     {
-        parse_line(minishell.line, &minishell.token, &minishell.extension, 0, &minishell.info);
-        while (minishell.token && minishell.token->previous)                 //utilise ce while pour te balader;
-            minishell.token = minishell.token->previous;
+        parse_line(&minishell, 0);
 
-        if (!strcmp(minishell.token->str, "exit"))
-        {
-            free_list(minishell.token);                      //fermeture programme          
-            free(minishell.line);
-            break;
-        }                 
+        minishell.token = minishell.info->first;
 
         while (minishell.token)
         {
-            if (!(ft_grammar(&minishell.token)))          
-                break;
+            /*if (!(ft_grammar(&minishell.token)))
+            {
+                printf("token = %s\ntype = %d\n\n", minishell.token->str, minishell.token->type);
+                minishell.grammar = -1;
+                break; 
+            }*/
+            
+            //printf("token = %s\ntype = %d\n\n", minishell.token->str, minishell.token->type);
 
             add_history(minishell.line);
-
-            printf("token = %s\ntype = %d\n\n", minishell.token->str, minishell.token->type);
-            if (!minishell.token->next)
-                break;
+            
             minishell.token = minishell.token->next;
 
         }
 
-        while (minishell.token && minishell.token->previous)                 //utilise ce while pour te balader;
-            minishell.token = minishell.token->previous;
-        //printf("minishell.token->str: %s\n", minishell.token->str);
-        if (execute_line(minishell.token, minishell.env))
-            return (1);
-        free_list(minishell.token);
-        //minishell.info = init_list(minishell.token, minishell.extension, minishell.info);                //je free la structure de controle de la liste
+        minishell.token = minishell.info->first;
+        
+        if (minishell.token)
+        {
+            minishell.here_doc_tab = here_doc(minishell.token, minishell.info->first);
+            //print_here_doc(minishell.here_doc_tab);  //simple fonction pour afficher
+        }
+        //printf("minishell.here_doc_tab: %p\n", minishell.here_doc_tab);
+        if (minishell.grammar > 0 && ft_strlen(minishell.line))
+        {
+            while (minishell.token && minishell.token->previous)                 
+                minishell.token = minishell.token->previous;
+
+            if (minishell.token)
+                if (execute_line(&minishell))
+                    return (1);
+        }
+
+        
+
+        
+        
+
+        ////////////////////////////////////// Reboot de la line et liberation des structures////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        
+
+        if (ft_strlen(minishell.line))
+            free_list(minishell.token);
+
+        free(minishell.info);
+
         minishell.info = init_list(minishell.info);
+        
         free(minishell.line);
+
+        prepaSignal.sa_handler=&handler;
+        minishell.line = readline("minishell$ ");
+        prepaSignal.sa_handler=SIG_IGN;
+    
+
+
     }
-
-    free(minishell.extension);
-
+    return (1);
 }
 
 
-            //FAIRE ATTENTION AU STRNCMP
+// GERER bug ls *.
+// problème parsing: echo test0 || (echo test1 || echo test2) le token parenthèse est: test2 au lieu de )

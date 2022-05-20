@@ -6,7 +6,7 @@
 /*   By: rlanani <rlanani@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2022/04/14 16:34:47 by rlanani           #+#    #+#             */
-/*   Updated: 2022/04/23 22:26:37 by rlanani          ###   ########.fr       */
+/*   Updated: 2022/05/16 20:14:07 by rlanani          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,7 +20,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/wait.h>
-
+#include <signal.h>
+#include <errno.h>
+#include <dirent.h>
 
 /* LEXIQUE =
     0 == other;
@@ -62,28 +64,46 @@ typedef struct s_pipe_exec
   int   input;
   int   output;
   int   pipe_fd[2];
+  int   here_pipe_fd[2];
+  t_token     **here_doc_tab;
+  int here_doc_tab_index;
+  int   first_cmd;
   char  *cmd;
   char  *path;
   char  *bin;
-  char  **newargs;
-  char **env;
-  int status;
+  char  **args;
+  char  ***env;
+  int   status;
+  int   here_doc;
+  int   here_inf;
 } t_pipe_exec;
 
 typedef struct s_minishell
 {
-  char	*line;
-  char    *result;
-  t_token    *token;
-  t_db_list  *info;
+  char	      *line;
+  char        *result;
+  t_token     *token;
+  t_db_list   *info;
   t_extension *extension;
-  char  **env;
+  int         quote;
+  char        ***env;
+  int         grammar;
+  int         here_doc;
+  t_token     **here_doc_tab;
 } t_minishell;
 
-int parse_line (char *str, t_token **token, t_extension **extension, int i, t_db_list **info);
-t_token *push_full_list (t_db_list *info, t_token *token, char *str, int type);
-t_token *push_list(t_db_list *info, t_token *token, char *str, int type);
+
+
+int       parse_line (t_minishell *minishell, int i);
+t_token   *push_full_list (t_db_list *info, t_token *token, char *str, int type);
+t_token   *push_list(t_db_list *info, t_token *token, char *str, int type);
 t_db_list *init_list(t_db_list *info);
-t_token *push_empty_list (t_db_list *info, t_token *token, char *str, int type);
-char *check_extension(char *str, t_extension *extension);
+t_token   *push_empty_list (t_db_list *info, t_token *token, char *str, int type);
+char      *check_extension(char *str, char **env);
 t_extension *set_extension(char *str, t_extension *extension);
+char	    *ft_strjoin(char const *s1, char const *s2);
+char	    *ft_substr(char const *s, unsigned int start, size_t len);
+size_t	  ft_strlen(const char *s);
+t_token   **here_doc(t_token *token, t_token *start);
+t_token   *put_here_doc(t_token *token);
+void      print_here_doc(t_token **token);
